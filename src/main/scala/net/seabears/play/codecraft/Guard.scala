@@ -4,7 +4,7 @@ import cwinter.codecraft.core.api._
 import cwinter.codecraft.util.maths.Vector2
 import scala.util.Random
 
-class Sentry(distance: Int) extends DroneController {
+class Guard(subject: Option[DroneController], distance: Int) extends DroneController {
   def enemiesInRange: Set[Drone] = enemiesInSight filter isInMissileRange
 
   def randomPosition: Vector2 = {
@@ -15,9 +15,14 @@ class Sentry(distance: Int) extends DroneController {
   override def onTick(): Unit = {
     enemiesInRange.headOption match {
       case Some(enemy) => fireMissilesAt(enemy)
-      case None => enemiesInSight.headOption match {
-        case Some(enemy) => if (!isMoving) moveTo(enemiesInSight.head)
-        case None => if (!isMoving) moveTo(randomPosition)
+      case None => {
+        // no enemies in range: follow subject
+        if (!isMoving) {
+          subject match {
+            case Some(drone) if !drone.isDead => moveTo(drone)
+            case _ => moveTo(randomPosition)
+          }
+        }
       }
     }
   }
