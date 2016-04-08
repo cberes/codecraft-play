@@ -1,6 +1,8 @@
 package net.seabears.play.codecraft
 
 import cwinter.codecraft.core.api._
+import cwinter.codecraft.util.maths.Vector2
+import scala.util.Random
 
 class Mothership extends DroneController {
   private[this] var harvesters = List[Harvester]()
@@ -39,40 +41,53 @@ class Mothership extends DroneController {
     if (liveEnemies.isEmpty) None else Some(liveEnemies maxBy (_.missileBatteries))
   }
 
+  def randomPosition: Vector2 = {
+    val randomDirection = Vector2(2 * math.Pi * Random.nextDouble())
+    position + 500 * randomDirection
+  }
+
+  def moveToAttack: Unit = {
+    val fallback = randomPosition
+    val attackers: List[DroneController] = (livingGuards filterNot (_.isAssigned)) ::: livingSoldiers
+    getEnemy match {
+      case Some(e) => attackers foreach (_.moveTo(e.lastKnownPosition))
+      case None => attackers foreach (_.moveTo(fallback))
+    }
+  }
+
   def build: Unit = {
+    // TODO move this where it will be called more frequently
+    if (soldiers.size > 4) {
+      moveToAttack
+    }
+
     val harvestersAlive = livingHarvesters
     val guardsAlive = livingGuards
+
     if (harvestersAlive.size < 2) {
       // make sure there are at least 2 harvesters
-      harvesters = new Harvester(this, 1000) :: harvestersAlive
-      buildDrone(harvesters.head, storageModules = 2)
+      val harvester = new Harvester(this, 1000)
+      buildDrone(harvester, storageModules = 2)
+      harvesters = harvester :: harvestersAlive
     } else if (harvestersAlive.size > guardsAlive.size) {
       // create guard if there are unguarded harvesters
       // assign at most one guard to a harvester
       val harvester: Option[Harvester] = harvestersToGuard.headOption
       harvester map (guardedHarvesters += _)
-      guards = new Guard(harvester, 1000) :: guardsAlive
-      buildDrone(guards.head, missileBatteries = 2)
+      val guard = new Guard(harvester, 1000)
+      buildDrone(guard, missileBatteries = 2)
+      guards = guard :: guardsAlive
     } else if (harvestersAlive.size < 6) {
       // TODO also check if there are minerals?
       // create at most 6 harvesters
-      harvesters = new Harvester(this, 1500) :: harvestersAlive
-      buildDrone(harvesters.head, storageModules = 2)
+      val harvester = new Harvester(this, 1500)
+      buildDrone(harvester, storageModules = 2)
+      harvesters = harvester :: harvestersAlive
     } else {
-      // if there are already a few soldiers, send them to attack
-      val soldiersAlive = livingSoldiers
-      if (soldiersAlive.size > 4) {
-        // send all soldiers and free guards to the enemy's position
-        getEnemy map (e => {
-          val enemyPosition = e.lastKnownPosition
-          soldiersAlive foreach (_.moveTo(enemyPosition))
-          (livingGuards filterNot (_.isAssigned)) foreach (_.moveTo(enemyPosition))
-        })
-      }
       // create soldiers for attack
       val soldier = new Soldier(500)
-      soldiers = soldier :: soldiersAlive
-      buildDrone(soldiers.head, missileBatteries = 3, shieldGenerators = 1)
+      buildDrone(soldier, missileBatteries = 3, shieldGenerators = 1)
+      soldiers = soldier :: livingSoldiers
     }
   }
 
