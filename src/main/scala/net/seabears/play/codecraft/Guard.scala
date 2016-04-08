@@ -12,6 +12,8 @@ class Guard(subject: Option[DroneController], distance: Int) extends DroneContro
     position + distance * randomDirection
   }
 
+  def isAssigned: Boolean = !subject.isEmpty && !subject.get.isDead
+
   override def onTick(): Unit = {
     enemiesInRange.headOption match {
       case Some(enemy) => fireMissilesAt(enemy)

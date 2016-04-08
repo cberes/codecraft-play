@@ -4,7 +4,7 @@ import cwinter.codecraft.core.api._
 import cwinter.codecraft.util.maths.Vector2
 import scala.util.Random
 
-class Sentry(distance: Int) extends DroneController {
+class Soldier(distance: Int) extends DroneController {
   def enemiesInRange: Set[Drone] = enemiesInSight filter isInMissileRange
 
   def randomPosition: Vector2 = {
