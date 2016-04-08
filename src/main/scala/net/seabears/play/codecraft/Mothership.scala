@@ -1,8 +1,6 @@
 package net.seabears.play.codecraft
 
 import cwinter.codecraft.core.api._
-import cwinter.codecraft.util.maths.Vector2
-import scala.util.Random
 
 class Mothership extends DroneController {
   private[this] var harvesters = List[Harvester]()
@@ -12,13 +10,30 @@ class Mothership extends DroneController {
   private[this] var minerals = Set[MineralCrystal]()
   private[this] var enemies = Set[Drone]()
   private[this] var claimed = Set[MineralCrystal]()
+  private[this] var livingGuards = Set[Guard]()
+  private[this] var livingSoldiers = Set[Soldier]()
+  private[this] var leader: Option[Soldier] = None
 
   def livingHarvesters: List[Harvester] = harvesters filterNot (_.isDead)
   def harvestersToGuard: List[Harvester] = livingHarvesters filterNot guardedHarvesters.contains
-  def livingSoldiers: List[Soldier] = soldiers filterNot (_.isDead)
-  def livingGuards: List[Guard] = guards filterNot (_.isDead)
 
   def enemiesInRange: Set[Drone] = enemiesInSight filter isInMissileRange
+
+  def add(guard: Guard): Unit = livingGuards += guard
+
+  def remove(guard: Guard): Unit = livingGuards -= guard
+
+  def add(soldier: Soldier): Unit = {
+    livingSoldiers += soldier
+    if (leader.isEmpty) leader = Some(soldier)
+  }
+
+  def remove(soldier: Soldier): Unit = {
+    livingSoldiers -= soldier
+    if (!leader.isEmpty && leader.get == soldier) {
+      leader = livingSoldiers.headOption
+    }
+  }
 
   def add(mineral: MineralCrystal): Unit =
     minerals = minerals.filterNot(_.harvested) + mineral
@@ -41,42 +56,32 @@ class Mothership extends DroneController {
     if (liveEnemies.isEmpty) None else Some(liveEnemies maxBy (_.missileBatteries))
   }
 
-  def randomPosition: Vector2 = {
-    val randomDirection = Vector2(2 * math.Pi * Random.nextDouble())
-    position + 500 * randomDirection
+  def removeEnemy: Unit = getEnemy map (enemies -= _)
+
+  def getLeader: Option[Soldier] = leader
+
+  def isLeader(soldier: Soldier): Boolean = leader match {
+    case Some(s) => s == soldier
+    case _ => false
   }
 
-  def moveToAttack: Unit = {
-    val fallback = randomPosition
-    val attackers: List[DroneController] = (livingGuards filterNot (_.isAssigned)) ::: livingSoldiers
-    getEnemy match {
-      case Some(e) => attackers foreach (_.moveTo(e.lastKnownPosition))
-      case None => attackers foreach (_.moveTo(fallback))
-    }
-  }
+  def soldierCount: Int = livingSoldiers.size
 
   def build: Unit = {
-    // TODO move this where it will be called more frequently
-    if (soldiers.size > 4) {
-      moveToAttack
-    }
-
     val harvestersAlive = livingHarvesters
-    val guardsAlive = livingGuards
-
     if (harvestersAlive.size < 2) {
       // make sure there are at least 2 harvesters
       val harvester = new Harvester(this, 1000)
       buildDrone(harvester, storageModules = 2)
       harvesters = harvester :: harvestersAlive
-    } else if (harvestersAlive.size > guardsAlive.size) {
+    } else if (harvestersAlive.size > livingGuards.size) {
       // create guard if there are unguarded harvesters
       // assign at most one guard to a harvester
       val harvester: Option[Harvester] = harvestersToGuard.headOption
       harvester map (guardedHarvesters += _)
-      val guard = new Guard(harvester, 1000)
+      val guard = new Guard(this, harvester, 1000)
       buildDrone(guard, missileBatteries = 2)
-      guards = guard :: guardsAlive
+      guards = guard :: guards
     } else if (harvestersAlive.size < 6) {
       // TODO also check if there are minerals?
       // create at most 6 harvesters
@@ -85,9 +90,9 @@ class Mothership extends DroneController {
       harvesters = harvester :: harvestersAlive
     } else {
       // create soldiers for attack
-      val soldier = new Soldier(500)
+      val soldier = new Soldier(this, 1500)
       buildDrone(soldier, missileBatteries = 3, shieldGenerators = 1)
-      soldiers = soldier :: livingSoldiers
+      soldiers = soldier :: soldiers
     }
   }
 
